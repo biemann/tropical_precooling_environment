@@ -1,20 +1,17 @@
 import os
 
-import gym
 import numpy as np
 import pandas as pd
 
-from reward import dummy_reward, dummy_comfort_reward
 
-
-class TropicalPrecooling(gym.Env):
+class OrTropicalPrecooling():
 
     def __init__(self):
         """
         load measurements and parameters for env simulation.
         """
         env_path = os.path.dirname(__file__)
-        measured_data_fnp = os.path.join(
+        measurd_data_fnp = os.path.join(
             env_path,
             "data",
             "building_measurements.csv"
@@ -25,7 +22,7 @@ class TropicalPrecooling(gym.Env):
             "building_parameters.csv"
         )
         self.measured_data = pd.read_csv(
-            measured_data_fnp,
+            measurd_data_fnp,
             index_col=0,
             parse_dates=True,
         )
@@ -33,7 +30,7 @@ class TropicalPrecooling(gym.Env):
             building_parameters_fnp,
             index_col=0,
             parse_dates=True,
-        )
+            )
 
         # Comfort bounds as defined in the paper.
         # in 156 5 minutes slots, 0:36 is the time between 4am and 7am.
@@ -73,23 +70,13 @@ class TropicalPrecooling(gym.Env):
         self.test_actions = []
         self.test_obs = []
 
-        self.low_action = 0
-        self.high_action = 50
-
-        self.action_dim = 2
-
-        self.action_space = gym.spaces.Box(low=-1 * np.ones(self.action_dim), high=1 * np.ones(self.action_dim))
-        self.observation_space = gym.spaces.Box(low=-1000, high=1500, shape=(4, 156))
-
     def simulate_day(self, simulated_date, T_zSP):
         """
         Simulate the zone temperature for one day.
-
         This starts with the temperature measured at the real building at 4am
         and computes change of temperatue within the time step length of 5
         minutes, by applying equations (3), (4) and (5) from the paper.
         This is repeated until the full day horizon is simulated.
-
         Parameters
         ----------
         simulated_date : datetime.date
@@ -97,7 +84,6 @@ class TropicalPrecooling(gym.Env):
             and measurements for the equations.
         T_zSP : numpy array with shape (156,)
             Temperature setpoints for every 5 minute slot between 4am and 5pm.
-
         Returns
         -------
         T_z : numpy array with shape (156,)
@@ -150,9 +136,7 @@ class TropicalPrecooling(gym.Env):
             # ... and now compute the delta for the zone temperature of the
             # next timestep.
             #
-            m_s_t = np.maximum(0, m_so + k_c * (T_z_t - T_zSP_t))  # (5)
-
-            # m_s_t = m_so + k_c * (T_z_t - T_zSP_t)
+            m_s_t = m_so + k_c * (T_z_t - T_zSP_t)  # (5)
             Q_cooling_t = c_pa * (m_s_t * (T_s_t - T_z_t))  # (4)
 
             # Now cooling/heating if AC is switched of.
@@ -164,7 +148,7 @@ class TropicalPrecooling(gym.Env):
             dT_dt += k_o1 * theta_CO2_t + k_o2
             dT_dt += Q_cooling_t
             dT_dt /= C_z
-            dT = dT_dt * 300  # 5 Minutes step length
+            dT = dT_dt * 300 # 5 Minutes step length
 
             T_z_t = T_z_t + dT
 
@@ -172,14 +156,12 @@ class TropicalPrecooling(gym.Env):
         T_z = np.asarray(T_z).flatten()
         return np.asarray(T_z)
 
-    def compute_obs(self, current_date, next_date, norm_T_zSP):
+    def compute_obs(self, current_date, next_date, T_zSP):
         """
         Generate the content for obs.
-
         First compute the zone temperature for the current date (which will be
         the previous day for the agent as it would receive this data after day
         has ended). Then look up / compute the remaining data.
-
         Parameters
         ----------
         current_date : datetime.date
@@ -188,7 +170,6 @@ class TropicalPrecooling(gym.Env):
             The date that is used to load the data for obs content 5 and 6.
         T_zSP : numpy array with shape (156,)
             Temperature setpoints for every 5 minute slot between 4am and 5pm.
-
         Returns
         -------
         obs : numpy array with shape (7, 156)
@@ -203,23 +184,11 @@ class TropicalPrecooling(gym.Env):
                 5: The perfect ambient temperature forecast for the current
                    day in °C.
                 6: The electricity costs for the current day in cents/kWh.
-
         """
-
-        T_zSP = self.low_action + (norm_T_zSP + 1.) * 0.5 * (self.high_action - self.low_action)
-        augmentedT_zSP = []
-        if not np.isnan(T_zSP).any():
-            for i in range(self.action_dim):
-                for j in range(int(156 / self.action_dim)):
-                    augmentedT_zSP.append(T_zSP[i])
-
-        else:
-            augmentedT_zSP = T_zSP
-
         # 0: The zone temperature of the previous day in °C
         T_z = self.simulate_day(
             simulated_date=current_date,
-            T_zSP=augmentedT_zSP,
+            T_zSP=T_zSP,
         )
 
         # 1, 2, 3: Retrieve the values that are just loaded from measured data.
@@ -233,7 +202,7 @@ class TropicalPrecooling(gym.Env):
         # 4: The energy costs of the previous day in $.
         E = self.estimate_energy_costs(
             T_z=T_z,
-            T_zSP=augmentedT_zSP,
+            T_zSP=T_zSP,
             e=self.e,
             simulated_date=current_date,
         )
@@ -262,7 +231,6 @@ class TropicalPrecooling(gym.Env):
         """
         Returns the training data, i.e. the the (baseline) actions and
         corresponding observations.
-
         Returns
         -------
         training_actions : list of numpy arrays with shape (156,)
@@ -273,15 +241,15 @@ class TropicalPrecooling(gym.Env):
         """
         training_actions = []
         training_obs = []
-        for i in range(0, len(self.train_dates) - 1):
+        for i in range(0, len(self.train_dates)-1):
             current_date = self.train_dates[i]
-            next_date = self.train_dates[i + 1]
+            next_date = self.train_dates[i+1]
 
             T_zSP = self.T_zSP_baseline
             obs = self.compute_obs(
                 current_date=current_date,
                 next_date=next_date,
-                norm_T_zSP=T_zSP,
+                T_zSP=T_zSP,
             )
 
             training_actions.append(T_zSP)
@@ -289,17 +257,16 @@ class TropicalPrecooling(gym.Env):
 
         return training_actions, training_obs
 
+
     def step(self, actions):
         """
         Simulate one day of building operation.
-
         Parameters
         ----------
         actions : numpy array with shape (156,)
             Temperature setpoints for every 5 minute slot between 4am and 5pm.
             The actual building doesn't support setpoints below 13°C. Setpoints
             can also be set to None which is interpreted as AC off.
-
         Returns
         -------
         obs : numpy array with shape (7, 156)
@@ -314,7 +281,6 @@ class TropicalPrecooling(gym.Env):
                 5: The perfect ambient temperature forecast for the current
                    day in °C.
                 6: The electricity costs for the current day in cents/kWh.
-
         reward : None
             This environment emits no reward, as the building doesn't emit one
             either. This field is kept for consistency with OpenAI gym
@@ -327,6 +293,7 @@ class TropicalPrecooling(gym.Env):
             with OpenAI gym conventions.
         """
 
+        reward = None
         done = False
         info = {}
 
@@ -343,11 +310,8 @@ class TropicalPrecooling(gym.Env):
         obs = self.compute_obs(
             current_date=current_date,
             next_date=next_date,
-            norm_T_zSP=actions,
+            T_zSP=actions,
         )
-
-        simp_obs = [obs[0], obs[2], obs[4], obs[6]]
-        reward = dummy_reward(simp_obs, actions)
 
         # Store the actions and obs as these are required to compute the
         # performance measure later
@@ -358,19 +322,16 @@ class TropicalPrecooling(gym.Env):
         # Increment so next call to step advances in time.
         self.current_step_date = next_date
 
-        return simp_obs, reward, done, info
+        return obs, reward, done, info
 
     def reset(self):
         """
         Reset and init the environment.
-
         Returns obs for one day following the baseline strategy. Although
         most of this information will not be of worth for the agent, it has
         the advantage that the obs format stays consistent.
-
         This function also erases the recorded values that might have been
         stored while the agent has interacted with the step function.
-
         Returns
         -------
         obs : numpy array with shape (7, 156)
@@ -385,7 +346,6 @@ class TropicalPrecooling(gym.Env):
                 5: The perfect ambient temperature forecast for the current
                    day in °C.
                 6: The electricity costs for the current day in cents/kWh.
-
         """
         self.simulated_dates = []
         self.test_actions = []
@@ -395,25 +355,21 @@ class TropicalPrecooling(gym.Env):
         next_date = self.test_dates[1]
 
         T_zSP = self.T_zSP_baseline
-        n_T_zSP = -1 + (T_zSP - self.low_action) * 2 / (self.high_action - self.low_action)
         obs = self.compute_obs(
             current_date=current_date,
             next_date=next_date,
-            norm_T_zSP=n_T_zSP,
+            T_zSP=T_zSP,
         )
 
         self.current_step_date = next_date
-        simp_obs = [obs[0], obs[2], obs[4], obs[6]]
 
-        return simp_obs
+        return obs
 
     def compute_performance_measure(self):
         """
         Compute performance measure as in equation (7) in the paper.
-
         This loads the recorded data about actions and obs generated by
         the evaluated agent automatically.
-
         Returns
         -------
         performance_measure : float
@@ -433,12 +389,11 @@ class TropicalPrecooling(gym.Env):
         # Now compute the corresponding values for the baseline, this is most
         # conveniently done by simulating the test phase with following the
         # baseline strategy.
-        env_bl = TropicalPrecooling()
+        env_bl = OrTropicalPrecooling()
         done = False
         _ = env_bl.reset()
         while not done:
-            norm_action = -1 + (env_bl.T_zSP_baseline - self.low_action) * 2 / (self.high_action - self.low_action)
-            _, _, done, _ = env_bl.step(actions=norm_action)
+            _, _, done, _ = env_bl.step(actions=env_bl.T_zSP_baseline)
 
         T_z_bl = np.asarray([a[0] for a in env_bl.test_obs])
         E_bl = np.asarray([a[4] for a in env_bl.test_obs])
@@ -458,11 +413,9 @@ class TropicalPrecooling(gym.Env):
     def estimate_energy_costs(self, T_z, T_zSP, e, simulated_date):
         """
         Compute the estimated energy costs based on equation (6) from the paper.
-
         Q_cooling_t has already been computed in self.simulate_day. However,
         this method should also work for cases where the zone temperature has
         been measured, especially to compute the performance measure.
-
         Parameters
         ----------
         T_z : numpy array with shape (156,)
@@ -474,7 +427,6 @@ class TropicalPrecooling(gym.Env):
         simulated_date : datetime.date
             The date of the day that is simulated. Used to lookup parameters
             and measurements for the equations.
-
         Returns
         -------
         E : numpy array with shape of T_z
@@ -494,20 +446,19 @@ class TropicalPrecooling(gym.Env):
 
         # The variables have no trailing _t (reresenting the (t) in the
         # equations as these are arrays that hold may of these variables.
-        m_s = np.maximum(0, m_so + k_c * (T_z - T_zSP))  # (5)
-        # m_s = m_so + k_c * (T_z - T_zSP)
+        m_s = m_so + k_c * (T_z - T_zSP)  # (5)
         Q_cooling = c_pa * (m_s * (T_s - T_z))  # (4)
 
         # Set cooling power to zero if AC was off.
         Q_cooling[np.isnan(Q_cooling)] = 0
 
-        E = -Q_cooling * e / COP
+        E = - Q_cooling * e / COP
         return E
+
 
     def estimate_pmv(self, T_z, T_min_comfort, T_max_comfort):
         """
         Computes an PMV estimate from given min and max comfort temperatures.
-
         PMV is usually computed as with Fanger's equation as
         (0.303 * e^(-0.036*M) + 0.028) * L
         whereby M is the metabolic rate and L is linear proportional to the
@@ -518,7 +469,6 @@ class TropicalPrecooling(gym.Env):
         equivalent to PMV=-0.5 and the maxmimum comfort temperature is
         equivalent to PMV=0.5, we estimate PMV with linear interpolation
         between these points.
-
         Arguments:
         ----------
         T_z : float or array with shape (156,) or (n, 156).
@@ -528,7 +478,6 @@ class TropicalPrecooling(gym.Env):
             The minimum thermal comfort temperature equivalent to PMV=-0.5.
         T_max_comfort : float or array with shape (156,).
             The maximum thermal comfort temperature equivalent to PMV=0.5.
-
         Returns:
         --------
         PMV : float or array
