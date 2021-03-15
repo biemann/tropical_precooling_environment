@@ -4,7 +4,7 @@ import gym
 import numpy as np
 import pandas as pd
 
-from reward import dummy_reward, dummy_comfort_reward
+from .reward import dummy_reward, dummy_comfort_reward
 
 
 class TropicalPrecooling(gym.Env):
