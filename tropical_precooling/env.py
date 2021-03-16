@@ -153,7 +153,7 @@ class TropicalPrecooling(gym.Env):
             m_s_t = np.maximum(0, m_so + k_c * (T_z_t - T_zSP_t))  # (5)
 
             # m_s_t = m_so + k_c * (T_z_t - T_zSP_t)
-            Q_cooling_t = c_pa * (m_s_t * (T_s_t - T_z_t))  # (4)
+            Q_cooling_t = c_pa * (m_s_t * (-1) *np.abs(T_s_t - T_z_t))  # (4)
 
             # Now cooling/heating if AC is switched of.
             if np.isnan(Q_cooling_t):
