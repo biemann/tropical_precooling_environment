@@ -36,7 +36,7 @@ class TestedAlgorithm:
 
 
 def train_ray():
-    ray.init()
+    ray.init(local_mode=True)
     register_env("tropical_precooling", lambda config: TropicalPrecooling())
     tune.run(
         "PPO",
@@ -45,7 +45,8 @@ def train_ray():
             "env": "tropical_precooling",
             "num_gpus": 0,
             "num_workers": 0,
-            #"model": {"use_lstm": True, "max_seq_len": 1}
+            #"framework": "torch",
+            "model": {"use_attention": True}
         },
         local_dir="/home/marco/Reinforcement_Learning/Tropical_env",
     )

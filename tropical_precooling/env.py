@@ -79,7 +79,7 @@ class TropicalPrecooling(gym.Env):
         self.action_dim = 2
 
         self.action_space = gym.spaces.Box(low=-1 * np.ones(self.action_dim), high=1 * np.ones(self.action_dim))
-        self.observation_space = gym.spaces.Box(low=-1000, high=1500, shape=(4, 156))
+        self.observation_space = gym.spaces.Box(low=-1000, high=1500, shape=(4 * 156,))
 
     def simulate_day(self, simulated_date, T_zSP):
         """
@@ -347,6 +347,7 @@ class TropicalPrecooling(gym.Env):
         )
 
         simp_obs = [obs[0], obs[2], obs[4], obs[6]]
+        flat_obs = [obs for sub_obs in simp_obs for obs in sub_obs]
         reward = dummy_reward(simp_obs, actions)
 
         # Store the actions and obs as these are required to compute the
@@ -358,7 +359,7 @@ class TropicalPrecooling(gym.Env):
         # Increment so next call to step advances in time.
         self.current_step_date = next_date
 
-        return simp_obs, reward, done, info
+        return flat_obs, reward, done, info
 
     def reset(self):
         """
@@ -404,8 +405,9 @@ class TropicalPrecooling(gym.Env):
 
         self.current_step_date = next_date
         simp_obs = [obs[0], obs[2], obs[4], obs[6]]
+        flat_obs = [obs for sub_obs in simp_obs for obs in sub_obs]
 
-        return simp_obs
+        return flat_obs
 
     def compute_performance_measure(self):
         """
